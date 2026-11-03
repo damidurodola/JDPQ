@@ -1,0 +1,80 @@
+\documentclass{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{hyperref}
+
+\begin{document}
+
+\section{Weighted-MinHash baseline}
+\label{sec:minhash-baseline}
+
+We compare against a weighted-MinHash baseline for approximate nearest-neighbour
+search under weighted Jaccard similarity,
+$J_w(x,y)=\sum_i \min(x_i,y_i)\big/\sum_i \max(x_i,y_i)$.
+The sketchers are the unmodified reference implementations of
+DartMinHash, FastICWS and BagMinHash2 from the public
+\href{https://github.com/tobc/dartminhash/tree/master}{dartminhash repository}.
+The reference code only produces sketches; it has no index and no search.
+Everything below is our own code around it.
+
+\paragraph{Sketching.}
+A vector with $k$ slots is sketched by one sketcher object with one fixed seed,
+and the database and all queries use that same object, so slot $j$ of a query is
+compared only with slot $j$ of a database vector. The estimate of $J_w$ is the
+fraction of equal slots. Empty vectors are removed during preprocessing.
+Three adaptations to the reference code were needed.
+(i)~FastICWS converts a possibly negative intermediate value to an unsigned
+integer, which is undefined behaviour; on our hardware it maps every negative
+value to the same hash input and inflates the collision rate. Because $J_w$ is
+invariant to a common scaling of both vectors, we multiply all weights by $2^{40}$
+\emph{inside} the sketcher only. The vectors used for ground truth and reranking
+are never rescaled or normalised.
+(ii)~BagMinHash2 uses fixed internal seeds and rounds weights to 32-bit floats.
+We make its seed meaningful by relabelling coordinate ids with a seeded
+bijection, which leaves $J_w$ unchanged.
+(iii)~The reference headers define non-inline functions, so they are included
+from a single translation unit; the rest of the code uses a small sketcher
+interface.
+
+\paragraph{Slot width.}
+Each slot id is hashed and truncated to $b\in\{1,2,4,8,16,64\}$ bits before it is stored,
+so a sketch costs $kb/8$ bytes per vector. Truncation causes false slot matches
+with probability about $2^{-b}$. We rank by raw match counts without
+correcting for this, which does not change the ordering.
+
+\paragraph{Retrieval.}
+We use banded LSH. The $k$ slots are split into $L$ bands of $r$ slots
+($k=Lr$); each band's $r$ stored ids are hashed to a bucket key in its own hash
+table. The key is computed from the $b$-bit ids, so a narrow slot width changes
+the candidate set and not only the ranking. The candidates of a query are the
+union of its buckets, ranked by the number of matching slots over all $k$ slots.
+A configuration is skipped if, on held-out vectors that are disjoint from the
+evaluation queries, its average candidate set exceeds a fixed fraction of the
+database. No parameter is tuned on the evaluation queries.
+Optionally, the top $S\in\{100,500,1000,2000\}$ candidates are reranked by exact
+$J_w$ on the original vectors; $S=0$ means no rerank.
+
+\paragraph{Ground truth and data.}
+Vectors are stored as sparse CSR matrices, unchanged. Exact duplicates in the
+database, and database vectors identical to a query, are removed.
+The exact top-100 under $J_w$ is computed with an inverted index. Since
+$\sum\max=\|q\|_1+\|x\|_1-\sum\min$, accumulating $\sum\min$ over the query's
+postings gives exact $J_w$ from one stored $L_1$ norm per vector. It is checked
+against brute force on random queries, with ties broken by the smaller database row index.
+Recall@$R$ is $|\text{returned}_{R}\cap\text{true}_{R}|/R$ for $R\in\{1,10,100\}$ against
+this ground truth.
+
+\paragraph{Matching the PQ comparison.}
+To compare at equal storage, we run only $(k,b)$ with $kb/8\le 160$ bytes, the
+largest PQ code in our grid, and we sweep $k\in\{1,2,\dots,512\}$, $r$ and $S$.
+Memory counts sketches ($kb/8$ bytes per vector), the hash tables with every
+stored id counted as 8~bytes, and one 8-byte id per vector, all as for
+IVF-PQ. The raw vectors, counted as dense \texttt{float32}, are added exactly
+for configurations that rerank. QPS is measured multi-threaded only, with the same
+thread count as the PQ runs, batch size 64, one warm-up batch, and the best of two
+timed passes. End-to-end QPS includes sketching the query and the rerank;
+we also report a filter-only QPS that excludes both.
+
+
+\end{document}

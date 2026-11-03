@@ -1,0 +1,23 @@
+build/
+*.o
+*.a
+# compiled tools
+/convert_to_binary
+/extract_train
+/export_train
+/remove_train
+/test_rerank
+/test_rtree
+/faiss_pq_ablation
+/benchmark
+# data and run output (large; see README for how to regenerate)
+*.bin
+*.tmp*
+*.log
+slurm-*.out
+data/
+results/
+__pycache__/
+baselines/lsh/wmh/hpc/
+slurm/
+python/

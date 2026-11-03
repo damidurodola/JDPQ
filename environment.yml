@@ -1,0 +1,27 @@
+# conda env for the public benchmark repo:  conda env create -f environment.yml && conda activate jdpq-bench
+# Versions marked "observed" are what the authors' machines had; the rest are left
+# unpinned because the exact versions used for the dataset-preparation runs were not
+# recorded. If you need bit-for-bit data, use the released derived files instead.
+name: jdpq-bench
+channels:
+  - conda-forge
+dependencies:
+  # --- C++ toolchain and libraries (Makefile, benchmark driver, tools) ---
+  - python=3.11
+  - cxx-compiler            # observed: g++ 11.4 (Ubuntu 22.04) and g++ 12.2 (cluster); needs C++17 and OpenMP
+  - make
+  - pkg-config
+  - geos                    # libgeos_c, used for exact polygon ground truth and the encoder
+  - eigen
+  - libfaiss=1.15.0=*_cpu   # observed; reference FAISS (Euclidean) baseline, faiss_pq_ablation
+  # --- dataset preparation and baselines (Python) ---
+  - numpy
+  - pandas
+  - pyarrow                 # SureChEMBL compounds.parquet
+  - rdkit                   # Morgan count fingerprints + molecule standardization
+  - shapely                 # polygon handling (observed: 2.0.3)
+  - rtree
+  - numba                   # hnsw.py distance kernels
+  - nmslib                  # HNSW baseline (python/hnsw.py)
+  - matplotlib              # plots (observed: 3.8.0)
+  - seaborn
